@@ -9,4 +9,4 @@
   tar_guidance_scale: 5.5
   n_min: 0
   n_max: 86  # 24/28 * 100, same start time as the default T=28 run
-  seed: 10
+  seed: 42
