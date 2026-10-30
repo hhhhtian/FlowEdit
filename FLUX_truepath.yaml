@@ -1,0 +1,12 @@
+- 
+  exp_name: "FlowEdit_FLUX_truepath"
+  dataset_yaml: edits.yaml
+  model_type: "FLUX"
+  sampler_type: "FlowEditFLUX"
+  T_steps: 100
+  n_avg: 4
+  src_guidance_scale: 1.5
+  tar_guidance_scale: 5.5
+  n_min: 0
+  n_max: 86  # 24/28 * 100, same start time as the default T=28 run
+  seed: 10
