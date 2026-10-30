@@ -88,7 +88,7 @@ if __name__ == "__main__":
             x0_src = x0_src.to(device)
             
             for tar_num, tar_prompt in enumerate(tar_prompts):
-                zt_list = [] # intermediate Z^FE_{t_i}
+                traj = {} # FlowEdit trajectory, filled by FlowEdit*
 
                 if model_type == 'SD3':
                     x0_tar = FlowEditSD3(pipe,
@@ -103,7 +103,7 @@ if __name__ == "__main__":
                                                             tar_guidance_scale,
                                                             n_min,
                                                             n_max,
-                                                            zt_list=zt_list,)
+                                                            traj=traj,)
                     
                 elif model_type == 'FLUX':
                     x0_tar = FlowEditFLUX(pipe,
@@ -118,7 +118,7 @@ if __name__ == "__main__":
                                                             tar_guidance_scale,
                                                             n_min,
                                                             n_max,
-                                                            zt_list=zt_list,)
+                                                            traj=traj,)
                 else:
                     raise NotImplementedError(f"Sampler type {model_type} not implemented")
 
@@ -137,15 +137,21 @@ if __name__ == "__main__":
                 os.makedirs(save_dir, exist_ok=True)
                 
                 image_tar[0].save(f"{save_dir}/output_T_steps_{T_steps}_n_avg_{n_avg}_cfg_enc_{src_guidance_scale}_cfg_dec{tar_guidance_scale}_n_min_{n_min}_n_max_{n_max}_seed{seed}.png")
-                # save intermediate Z^FE_{t_i} (latents + decoded images)
-                mid_dir = f"middle_images/{exp_name}/{model_type}/src_{src_prompt_txt}/tar_{tar_prompt_txt}"
-                os.makedirs(mid_dir, exist_ok=True)
-                torch.save({"t": [t for t, _ in zt_list], "zt": torch.cat([z for _, z in zt_list])}, f"{mid_dir}/zt_FE.pt")
-                for step, (t_val, zt) in enumerate(zt_list):
-                    zt_denorm = (zt.to(device) / pipe.vae.config.scaling_factor) + pipe.vae.config.shift_factor
+                # latent trajectory (for computation)
+                lat_dir = f"step0_images_latent/{exp_name}/{model_type}/src_{src_prompt_txt}/tar_{tar_prompt_txt}"
+                os.makedirs(lat_dir, exist_ok=True)
+                torch.save({"x_src": x0_src.cpu(), "x_tar": x0_tar.cpu(), "t": torch.tensor(traj["t"]),
+                            "zt": torch.cat(traj["zt"])},
+                           f"{lat_dir}/traj_T{T_steps}_navg{n_avg}.pt")
+                # decoded images (for viewing): edited, every 10th Z^FE_{t_i}
+                real_dir = lat_dir.replace("step0_images_latent", "step0_images_real", 1)
+                os.makedirs(real_dir, exist_ok=True)
+                image_tar[0].save(f"{real_dir}/edited.png")
+                for step in range(0, len(traj["t"]), 10):
+                    zt_denorm = (traj["zt"][step].to(device) / pipe.vae.config.scaling_factor) + pipe.vae.config.shift_factor
                     with torch.autocast("cuda"), torch.inference_mode():
                         image_mid = pipe.vae.decode(zt_denorm, return_dict=False)[0]
-                    pipe.image_processor.postprocess(image_mid)[0].save(f"{mid_dir}/step_{step:03d}_t_{t_val:.4f}.png")
+                    pipe.image_processor.postprocess(image_mid)[0].save(f"{real_dir}/step_{step:03d}_t_{traj['t'][step]:.4f}.png")
 
                 # also save source and target prompt in txt file
                 with open(f"{save_dir}/prompts.txt", "w") as f:

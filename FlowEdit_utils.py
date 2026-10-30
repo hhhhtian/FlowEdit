@@ -121,7 +121,7 @@ def FlowEditSD3(pipe,
     tar_guidance_scale: float = 13.5,
     n_min: int = 0,
     n_max: int = 15,
-    zt_list: Optional[list] = None,):
+    traj: Optional[dict] = None,):
     
     device = x_src.device
 
@@ -205,8 +205,11 @@ def FlowEditSD3(pipe,
             
             zt_edit = zt_edit.to(V_delta_avg.dtype)
 
-            if zt_list is not None: # record Z^FE_{t_{i-1}}
-                zt_list.append((float(t_im1), zt_edit.cpu()))
+            if traj is not None: # record t_i, Z^FE_{t_i} (incl. initial point)
+                unpack = lambda z: z.cpu()
+                if not traj:
+                    traj.update(t=[float(t_i)], zt=[unpack(x_src)])
+                traj["t"].append(float(t_im1)); traj["zt"].append(unpack(zt_edit))
 
         else: # i >= T_steps-n_min # regular sampling for last n_min steps
 
@@ -245,7 +248,7 @@ def FlowEditFLUX(pipe,
     tar_guidance_scale: float = 5.5,
     n_min: int = 0,
     n_max: int = 24,
-    zt_list: Optional[list] = None,):
+    traj: Optional[dict] = None,):
 
     device = x_src.device
     orig_height, orig_width = x_src.shape[2]*pipe.vae_scale_factor//2, x_src.shape[3]*pipe.vae_scale_factor//2
@@ -378,8 +381,11 @@ def FlowEditFLUX(pipe,
 
             zt_edit = zt_edit.to(V_delta_avg.dtype)
 
-            if zt_list is not None: # record Z^FE_{t_{i-1}} (unpacked)
-                zt_list.append((float(t_im1), pipe._unpack_latents(zt_edit, orig_height, orig_width, pipe.vae_scale_factor).cpu()))
+            if traj is not None: # record t_i, Z^FE_{t_i} (incl. initial point) (unpacked)
+                unpack = lambda z: pipe._unpack_latents(z, orig_height, orig_width, pipe.vae_scale_factor).cpu()
+                if not traj:
+                    traj.update(t=[float(t_i)], zt=[unpack(x_src_packed)])
+                traj["t"].append(float(t_im1)); traj["zt"].append(unpack(zt_edit))
 
         else: # i >= T_steps-n_min # regular sampling last n_min steps
 
